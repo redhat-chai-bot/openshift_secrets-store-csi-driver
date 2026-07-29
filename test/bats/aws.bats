@@ -179,17 +179,9 @@ teardown_file() {
    [[ "${result//$'\r'}" == "BeforeRotation" ]]
 
    aws ssm put-parameter --name $PM_ROTATION_TEST_NAME --value AfterRotation --type SecureString --overwrite --region $REGION
-   # SSCSI Operator has set "--rotation-poll-interval=2m" while deploying the operand.
-   # In v1.6.0 the dedicated rotation reconciler was removed. Rotation now
-   # depends on kubelet calling NodePublishVolume for republish.
-   # rotation-poll-interval (120s) acts as a minimum cache duration, not a
-   # polling interval. Kubelet's republish cycle runs on its own ~60-100s
-   # interval, not synchronized with the cache. Sleeping exactly 120s creates
-   # a race; the extra 30s buffer ensures kubelet completes at least one
-   # republish cycle after the cache expires.
-   sleep 150
-   result=$(kubectl --namespace $NAMESPACE exec $POD_NAME -- cat /mnt/secrets-store/$PM_ROTATION_TEST_NAME)
-   [[ "${result//$'\r'}" == "AfterRotation" ]]
+   # See vault.bats test 6 comment for v1.6.0 rotation timing rationale.
+   run wait_for_process 240 10 "kubectl --namespace $NAMESPACE exec $POD_NAME -- cat /mnt/secrets-store/$PM_ROTATION_TEST_NAME | tr -d '\\r' | grep -qx AfterRotation"
+   assert_success
 }
 
 @test "CSI inline volume test with rotation - secrets manager" {
@@ -197,17 +189,9 @@ teardown_file() {
    [[ "${result//$'\r'}" == "BeforeRotation" ]]
   
    aws secretsmanager put-secret-value --secret-id $SM_ROT_TEST_NAME --secret-string AfterRotation --region $REGION
-  # SSCSI Operator has set "--rotation-poll-interval=2m" while deploying the operand.
-  # In v1.6.0 the dedicated rotation reconciler was removed. Rotation now
-  # depends on kubelet calling NodePublishVolume for republish.
-  # rotation-poll-interval (120s) acts as a minimum cache duration, not a
-  # polling interval. Kubelet's republish cycle runs on its own ~60-100s
-  # interval, not synchronized with the cache. Sleeping exactly 120s creates
-  # a race; the extra 30s buffer ensures kubelet completes at least one
-  # republish cycle after the cache expires.
-   sleep 150
-   result=$(kubectl --namespace $NAMESPACE exec $POD_NAME -- cat /mnt/secrets-store/$SM_ROT_TEST_NAME)
-   [[ "${result//$'\r'}" == "AfterRotation" ]]
+   # See vault.bats test 6 comment for v1.6.0 rotation timing rationale.
+   run wait_for_process 240 10 "kubectl --namespace $NAMESPACE exec $POD_NAME -- cat /mnt/secrets-store/$SM_ROT_TEST_NAME | tr -d '\\r' | grep -qx AfterRotation"
+   assert_success
 }
 
 @test "CSI inline volume test with pod portability - read ssm parameters from pod" {

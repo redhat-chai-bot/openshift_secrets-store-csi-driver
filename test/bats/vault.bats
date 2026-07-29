@@ -120,14 +120,11 @@ EOF
   # depends on kubelet calling NodePublishVolume for republish.
   # rotation-poll-interval (120s) acts as a minimum cache duration, not a
   # polling interval. Kubelet's republish cycle runs on its own ~60-100s
-  # interval, not synchronized with the cache. Sleeping exactly 120s creates
-  # a race; the extra 30s buffer ensures kubelet completes at least one
-  # republish cycle after the cache expires.
-  sleep 150
-
-  # verify rotated value
-  result=$(kubectl exec secrets-store-rotation -- cat /mnt/secrets-store/foo)
-  [[ "$result" == "rotated" ]]
+  # interval, not synchronized with the cache — worst case ~220s total.
+  # A bounded retry avoids both flakiness (too-short sleep) and waste
+  # (too-long sleep), finishing as soon as rotation succeeds.
+  run wait_for_process 240 10 "kubectl exec secrets-store-rotation -- cat /mnt/secrets-store/foo | grep -qx rotated"
+  assert_success
 
   archive_info
 }
